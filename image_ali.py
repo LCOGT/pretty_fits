@@ -4,6 +4,7 @@ import PIL.Image as pli
 import numpy as np
 import alipy
 import glob
+import logging
 
 def reshape(data):
     return data.shape
@@ -20,16 +21,20 @@ def scale_data(data):
     '''
     # Level out the colour balance in the frames
     data = remove_cr(data)
-    data-= np.median(data)
+    median = np.median(data)
+    logging.warning('Min before =%s' % data.min())
+    logging.warning('Median=%s' % median)
+    logging.warning('Min=%s' % data.min())
+    logging.warning('Max=%s' % data.max())
+    data-= median
     data = np.ma.masked_less(data, 0.)
-    data.fill_value=1.
-    data1 = data.reshape(data.shape[0]*data.shape[1])
-    max_val = np.percentile(data1,99.5)
-    scaled = data*256./max_val
-    new_scaled = np.ma.masked_greater(scaled, 255.)
-    new_scaled.fill_value=255.
-    img_data = new_scaled.filled()
-    small_data =np.resize(img_data, (2000,2000))
+    data.fill_value=0.
+    data = np.arcsinh(data.filled())
+    max_val = np.percentile(data,99.5)
+    scaled = data*255./max_val
+    scaled = np.ma.masked_greater(scaled, 255.)
+    scaled.fill_value=255.
+    img_data = scaled.filled()
     return img_data
 
 if __name__ == '__main__':
