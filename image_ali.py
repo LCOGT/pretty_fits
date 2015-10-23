@@ -10,32 +10,34 @@ def reshape(data):
     return data.shape
 
 def remove_cr(data):
-    m, imdata = detect_cosmics(data, readnoise=10., gain=1.0, sigclip=6, sigfrac=1.0)
+    m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=4., sigfrac=.2, objlim=5.)
     return imdata
 
 def scale_data(data):
     '''
+    - Remove bogus (i.e. negative) pixels
+    - Remove Cosmic Rays
     - Find the 99.5% percentile and remove everything above that
     - Subtract the median sky value
     - Scale the images in the range for JPEG
     '''
     # Level out the colour balance in the frames
-    data = remove_cr(data)
+    logging.warning('--- Begin Scaling ---')
     median = np.median(data)
-    logging.warning('Min before =%s' % data.min())
+    data[data<0.]=median
+    # Run astroScrappy to remove pesky cosmic rays
+    data = remove_cr(data)
     logging.warning('Median=%s' % median)
-    logging.warning('Min=%s' % data.min())
-    logging.warning('Max=%s' % data.max())
+    # Recalculate the median because there is nothing less than the media now
+    median = np.median(data)
     data-= median
-    data = np.ma.masked_less(data, 0.)
-    data.fill_value=0.
-    data = np.arcsinh(data.filled())
+    logging.warning('Max after median=%s' % data.max())
     max_val = np.percentile(data,99.5)
-    scaled = data*255./max_val
-    scaled = np.ma.masked_greater(scaled, 255.)
-    scaled.fill_value=255.
-    img_data = scaled.filled()
-    return img_data
+    logging.warning('99.5 =%s' % max_val)
+    scaled = data*255./(max_val)
+    scaled[scaled>255.]=255.
+    logging.warning('Median of scaled=%s' % np.median(scaled))
+    return scaled
 
 if __name__ == '__main__':
     images_to_align = sorted(glob.glob("temp/*.fits"))
