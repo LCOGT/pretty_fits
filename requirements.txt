@@ -1,0 +1,10 @@
+alipy
+asciidata
+astropy
+astroscrappy
+Cython
+ipython
+numpy
+Pillow
+pyfits
+scipy

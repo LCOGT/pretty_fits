@@ -10,6 +10,9 @@ def reshape(data):
     return data.shape
 
 def remove_cr(data):
+    '''
+    Removes high value pixels which are presumed to be cosmic ray hits.
+    '''
     m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=4., sigfrac=.2, objlim=6.)
     return imdata
 
@@ -77,7 +80,6 @@ if __name__ == '__main__':
 
     for id in identifications:
         if id.ok:
-        # Variant 1, using only scipy and the simple affine transorm :
             alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=True)
 
     aligned_images = sorted(glob.glob("alipy_out/*.fits"))
