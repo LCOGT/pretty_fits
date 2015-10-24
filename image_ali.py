@@ -10,10 +10,10 @@ def reshape(data):
     return data.shape
 
 def remove_cr(data):
-    m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=4., sigfrac=.2, objlim=5.)
+    m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=4., sigfrac=.2, objlim=6.)
     return imdata
 
-def scale_data(data):
+def clean_data(data):
     '''
     - Remove bogus (i.e. negative) pixels
     - Remove Cosmic Rays
@@ -28,24 +28,52 @@ def scale_data(data):
     # Run astroScrappy to remove pesky cosmic rays
     data = remove_cr(data)
     logging.warning('Median=%s' % median)
-    # Recalculate the median because there is nothing less than the media now
+    logging.warning('Max after median=%s' % data.max())
+    return data
+
+
+def scale_data(data):
+    # Recalculate the median
+    data[data<0.]=0.
     median = np.median(data)
     data-= median
-    logging.warning('Max after median=%s' % data.max())
-    max_val = np.percentile(data,99.5)
+    data[data<0.]=0.
+    sc_data= data
+    max_val = np.percentile(sc_data,99.5)
     logging.warning('99.5 =%s' % max_val)
-    scaled = data*255./(max_val)
-    scaled[scaled>255.]=255.
+    scaled = sc_data*255./(max_val)
+    scaled[scaled>255]=255
     logging.warning('Median of scaled=%s' % np.median(scaled))
+    logging.warning('Min scaled=%s' % scaled.min())
     return scaled
 
-if __name__ == '__main__':
-    images_to_align = sorted(glob.glob("temp/*.fits"))
+def select_images(folder='temp/'):
+    images_to_align = sorted(glob.glob("%s*.fits" % folder))
     ref_image = images_to_align[0]
+    return ref_image, images_to_align
+
+def read_aligned(filelist):
+    # Scale the images
+    rgb_list =[]
+    for file_in in filelist:
+        data, hdrs = fits.getdata(file_in, header=True)
+        data = clean_data(data)
+        data = scale_data(data)
+        rgb_list.append(data)
+    return rgb_list
+
+def create_colour(rgb_list):
+    rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
+    colour_img = pli.fromarray(rgb_cube)
+    colour_img.save('test.jpg')
+    colour_img.show()
+    return
+
+if __name__ == '__main__':
+    ref_image, images_to_align = select_images()
 
     identifications = alipy.ident.run(ref_image, images_to_align[1:], visu=False)
     outputshape = alipy.align.shape(ref_image)
-    # This is simply a tuple (width, height)... you could specify any other shape.
 
     for id in identifications:
         if id.ok:
@@ -54,12 +82,6 @@ if __name__ == '__main__':
 
     aligned_images = sorted(glob.glob("alipy_out/*.fits"))
 
-    B_data, B_hdrs = fits.getdata(ref_image, header=True)
-    V_data, V_hdrs = fits.getdata(aligned_images[0], header=True)
-    R_data, R_hdrs = fits.getdata(aligned_images[1], header=True)
-    # Scale the images
-    rgb_list = [ scale_data(R_data), scale_data(V_data), scale_data(B_data)] # make sure these are in range 0-255
-    rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
-    color_img = pli.fromarray(rgb_cube)
-    color_img.save('test.jpg')
-    color_img.show()
+    rgb_list = read_aligned([ref_image]+aligned_images)
+
+    create_colour(rgb_list)
