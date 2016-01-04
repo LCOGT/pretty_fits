@@ -19,10 +19,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 from astropy.io import fits
 from astroscrappy import detect_cosmics
 import PIL.Image as pli
+from PIL import ImageFont, ImageDraw
 import numpy as np
 import alipy
 import glob
 import logging
+import sys, os
+import argparse
+import tempfile
+import shutil
+import subprocess
+
+DATA_DIR = '/Users/egomez/Downloads/'
 
 def reshape(data):
     return data.shape
@@ -31,7 +39,7 @@ def remove_cr(data):
     '''
     Removes high value pixels which are presumed to be cosmic ray hits.
     '''
-    m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=4., sigfrac=.2, objlim=6.)
+    m, imdata = detect_cosmics(data, readnoise=20., gain=1.4, sigclip=5., sigfrac=.5, objlim=6.)
     return imdata
 
 def clean_data(data):
@@ -43,7 +51,7 @@ def clean_data(data):
     - Scale the images in the range for JPEG
     '''
     # Level out the colour balance in the frames
-    logging.warning('--- Begin Scaling ---')
+    logging.warning('--- Begin CR removal ---')
     median = np.median(data)
     data[data<0.]=median
     # Run astroScrappy to remove pesky cosmic rays
@@ -53,55 +61,85 @@ def clean_data(data):
     return data
 
 
-def scale_data(data):
+def scale_data(data, i):
     # Recalculate the median
+    logging.warning('--- Begin Scaling ---')
     data[data<0.]=0.
     median = np.median(data)
     data-= median
     data[data<0.]=0.
-    sc_data= data
+    sc_data= data #np.arcsinh(data)
     max_val = np.percentile(sc_data,99.5)
     logging.warning('99.5 =%s' % max_val)
     scaled = sc_data*255./(max_val)
-    scaled[scaled>255]=255
+    scaled[scaled>255.]=255.
     logging.warning('Median of scaled=%s' % np.median(scaled))
     logging.warning('Min scaled=%s' % scaled.min())
     return scaled
 
-def select_images(folder='temp/'):
-    images_to_align = sorted(glob.glob("%s*.fits" % folder))
+def select_images(folder='temp'):
+    images_to_align = sorted(glob.glob("%s/*.fits" % folder))
     ref_image = images_to_align[0]
     return ref_image, images_to_align
 
 def read_aligned(filelist):
     # Scale the images
     rgb_list =[]
-    for file_in in filelist:
+    for i, file_in in enumerate(filelist):
         data, hdrs = fits.getdata(file_in, header=True)
         data = clean_data(data)
-        data = scale_data(data)
+        data = scale_data(data, i)
+        logging.warning('Shape of %s %s' % (file_in, str(data.shape)))
         rgb_list.append(data)
     return rgb_list
 
-def create_colour(rgb_list):
+def create_colour_simple(rgb_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
+    #rgb_list[1] *= 3
     rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
     colour_img = pli.fromarray(rgb_cube)
-    colour_img.save('test.jpg')
-    colour_img.show()
+    if credit:
+        font = ImageFont.truetype("Helvetica.ttf", 40)
+        textstamp = 'Las Cumbres Observatory Global Telescope Network - %s' % object_name
+        draw = ImageDraw.Draw(colour_img)
+        draw.text((50, 10), textstamp, font=font, fill=(255,255,255))
+    colour_img.save(filename)
+    if preview:
+        colour_img.show()
     return
 
+def create_colour_stiff(img_list, filename='test.jpg', object_name='Unknown', credit=False):
+    subprocess.call(['stiff']+img_list)
+    return
+
+
 if __name__ == '__main__':
-    ref_image, images_to_align = select_images()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--directory", help="directory of files inside Downloads")
+    parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
+    parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
+    parser.add_argument("-p", "--preview", help="use STIFF for combining images", action="store_true")
+    args = parser.parse_args()
+    folder_name = args.directory
+    folder_path = os.path.join(DATA_DIR, folder_name)
+    filename = '%s.jpg' % folder_name
+    tmpdir = tempfile.mkdtemp()
+
+    ref_image, images_to_align = select_images(folder=folder_path)
 
     identifications = alipy.ident.run(ref_image, images_to_align[1:], visu=False)
     outputshape = alipy.align.shape(ref_image)
 
     for id in identifications:
         if id.ok:
-            alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=True)
+            alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=True, outdir=tmpdir)
 
-    aligned_images = sorted(glob.glob("alipy_out/*.fits"))
+    aligned_images = sorted(glob.glob(tmpdir+"/*.fits"))
 
-    rgb_list = read_aligned([ref_image]+aligned_images)
+    if args.stiff:
+        create_colour_stiff(aligned_images, filename, object_name=folder_name, credit=args.credit)
+    else:
+        rgb_list = read_aligned([ref_image]+aligned_images)
+        create_colour_simple(rgb_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
 
-    create_colour(rgb_list)
+    # Remove the temporary files
+    shutil.rmtree(tmpdir)
