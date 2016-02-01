@@ -122,7 +122,7 @@ def read_write_data(filelist):
         data = clean_data(data)
         # data = scale_data(data, i)
         logging.warning('Shape of %s %s' % (file_in, str(data.shape)))
-        new_filename = file_in.split('.')[0] + ".fits"
+        new_filename = file_in.split('.')[0] + "_c.fits"
         hdu = fits.PrimaryHDU(data, header=hdrs)
         hdu.writeto(new_filename)
         img_list.append(new_filename)
@@ -167,17 +167,14 @@ if __name__ == '__main__':
 
     ref_image, images_to_align = select_images(folder=folder_path, fpacked=args.fpack)
 
-    if args.fpack:
-        img_list = read_write_data(images_to_align)
-        print(img_list)
-        img_list = reproject_files(img_list[0], img_list, tmpdir)
-    else:
-        img_list = reproject_files(ref_image, images_to_align, tmpdir)
 
     if args.stiff:
+        img_list = read_write_data(images_to_align)
+        img_list = reproject_files(img_list[0], img_list, tmpdir)
         create_colour_stiff(img_list, filename, object_name=folder_name, credit=args.credit)
     else:
-        create_colour_simple(folder_path, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
+        img_list = reproject_files(ref_image, images_to_align, tmpdir)
+        create_colour_simple(img_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
 
     # Remove the temporary files
     shutil.rmtree(tmpdir)
