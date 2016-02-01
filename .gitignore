@@ -63,3 +63,5 @@ docs/_build/
 target/
 
 *.ttf
+*.xml
+*.tif

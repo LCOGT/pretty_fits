@@ -77,8 +77,12 @@ def scale_data(data, i):
     logging.warning('Min scaled=%s' % scaled.min())
     return scaled
 
-def select_images(folder='temp'):
-    images_to_align = sorted(glob.glob("%s/*.fits" % folder))
+def select_images(folder='temp', fpacked=False):
+    if fpacked:
+        filetype = "%s/*.fits.fz"
+    else:
+        filetype = "%s/*.fits"
+    images_to_align = sorted(glob.glob(filetype % folder))
     ref_image = images_to_align[0]
     return ref_image, images_to_align
 
@@ -93,8 +97,8 @@ def read_aligned(filelist):
         rgb_list.append(data)
     return rgb_list
 
-def create_colour_simple(rgb_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
-    #rgb_list[1] *= 3
+def create_colour_simple(img_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
+    rgb_list = read_aligned(img_list)
     rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
     colour_img = pli.fromarray(rgb_cube)
     if credit:
@@ -107,26 +111,32 @@ def create_colour_simple(rgb_list, filename='test.jpg', object_name='Unknown', c
         colour_img.show()
     return
 
+def read_write_data(filelist):
+    '''
+    Overwrite FITS files with cleaned and scaled data
+    - Data is read into uncompressed FITS file to remove dependency on FPack
+    '''
+    img_list =[]
+    for i, file_in in enumerate(filelist):
+        data, hdrs = fits.getdata(file_in, header=True)
+        data = clean_data(data)
+        # data = scale_data(data, i)
+        logging.warning('Shape of %s %s' % (file_in, str(data.shape)))
+        new_filename = file_in.split('.')[0] + ".fits"
+        hdu = fits.PrimaryHDU(data, header=hdrs)
+        hdu.writeto(new_filename)
+        img_list.append(new_filename)
+
+    return img_list
+
+
+
 def create_colour_stiff(img_list, filename='test.jpg', object_name='Unknown', credit=False):
     subprocess.call(['stiff']+img_list)
     return
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--directory", help="directory of files inside Downloads")
-    parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
-    parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
-    parser.add_argument("-p", "--preview", help="use STIFF for combining images", action="store_true")
-    args = parser.parse_args()
-    folder_name = args.directory
-    folder_path = os.path.join(DATA_DIR, folder_name)
-    filename = '%s.jpg' % folder_name
-    tmpdir = tempfile.mkdtemp()
-
-    ref_image, images_to_align = select_images(folder=folder_path)
-
-    identifications = alipy.ident.run(ref_image, images_to_align[1:], visu=False)
+def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
+    identifications = alipy.ident.run(ref_image, images_to_align[1:3], visu=False)
     outputshape = alipy.align.shape(ref_image)
 
     for id in identifications:
@@ -135,11 +145,39 @@ if __name__ == '__main__':
 
     aligned_images = sorted(glob.glob(tmpdir+"/*.fits"))
 
-    if args.stiff:
-        create_colour_stiff(aligned_images, filename, object_name=folder_name, credit=args.credit)
+    img_list = [ref_image]+aligned_images
+    return img_list
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--files", help="Comma separated list of 3 files")
+    parser.add_argument("-d", "--directory", help="directory of files inside Downloads")
+    parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
+    parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
+    parser.add_argument("-p", "--preview", help="show a PIL generated JPEG preview", action="store_true")
+    parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
+    args = parser.parse_args()
+
+    folder_name = args.directory
+    folder_path = os.path.join(DATA_DIR, folder_name)
+    filename = '%s.jpg' % folder_name
+    tmpdir = tempfile.mkdtemp()
+
+    ref_image, images_to_align = select_images(folder=folder_path, fpacked=args.fpack)
+
+    if args.fpack:
+        img_list = read_write_data(images_to_align)
+        print(img_list)
+        img_list = reproject_files(img_list[0], img_list, tmpdir)
     else:
-        rgb_list = read_aligned([ref_image]+aligned_images)
-        create_colour_simple(rgb_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
+        img_list = reproject_files(ref_image, images_to_align, tmpdir)
+
+    if args.stiff:
+        create_colour_stiff(img_list, filename, object_name=folder_name, credit=args.credit)
+    else:
+        create_colour_simple(folder_path, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
 
     # Remove the temporary files
     shutil.rmtree(tmpdir)
