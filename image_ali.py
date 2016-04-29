@@ -80,11 +80,17 @@ def scale_data(data, i):
 def select_images(folder='temp', fpacked=False):
     if fpacked:
         filetype = "%s/*.fits.fz"
+        images_to_align = sorted(glob.glob(filetype % folder))
+        ref_image = images_to_align[0]
+        hdr = fits.getheader(ref_image, 1)
     else:
         filetype = "%s/*.fits"
-    images_to_align = sorted(glob.glob(filetype % folder))
-    ref_image = images_to_align[0]
-    return ref_image, images_to_align
+        images_to_align = sorted(glob.glob(filetype % folder))
+        ref_image = images_to_align[0]
+        hdr = fits.getheader(ref_image)
+    objectname = hdr['OBJECT'].strip().replace(' ','_')
+    filename = '%s-%s.jpg' % (objectname, hdr['REQNUM'])
+    return ref_image, images_to_align, filename
 
 def read_aligned(filelist):
     # Scale the images
@@ -109,7 +115,9 @@ def create_colour_simple(img_list, filename='test.jpg', object_name='Unknown', c
     colour_img.save(filename)
     if preview:
         colour_img.show()
-    return
+
+    return True
+
 
 def read_write_data(filelist):
     '''
@@ -130,10 +138,13 @@ def read_write_data(filelist):
     return img_list
 
 
+def create_colour_stiff(img_list, filename='test.jpg'):
+    resp = subprocess.call(['stiff']+img_list)
+    if resp == 0:
+        resp = subprocess.call(['convert', '-quality','70%', '-resize','1500', 'stiff.tif', filename])
 
-def create_colour_stiff(img_list, filename='test.jpg', object_name='Unknown', credit=False):
-    subprocess.call(['stiff']+img_list)
-    return
+    return True
+
 
 def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
     identifications = alipy.ident.run(ref_image, images_to_align[1:3], visu=False)
@@ -143,11 +154,11 @@ def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
         if id.ok:
             alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=True, outdir=tmpdir)
 
-    aligned_images = sorted(glob.glob(tmpdir+"/*.fits"))
+    aligned_images = sorted(glob.glob(tmpdir+"/*_affineremap.fits"))
 
     img_list = [ref_image]+aligned_images
-    return img_list
 
+    return img_list
 
 
 if __name__ == '__main__':
@@ -162,16 +173,15 @@ if __name__ == '__main__':
 
     folder_name = args.directory
     folder_path = os.path.join(DATA_DIR, folder_name)
-    filename = '%s.jpg' % folder_name
     tmpdir = tempfile.mkdtemp()
 
-    ref_image, images_to_align = select_images(folder=folder_path, fpacked=args.fpack)
+    ref_image, images_to_align, filename = select_images(folder=folder_path, fpacked=args.fpack)
 
 
     if args.stiff:
         img_list = read_write_data(images_to_align)
         img_list = reproject_files(img_list[0], img_list, tmpdir)
-        create_colour_stiff(img_list, filename, object_name=folder_name, credit=args.credit)
+        create_colour_stiff(img_list, filename)
     else:
         img_list = reproject_files(ref_image, images_to_align, tmpdir)
         create_colour_simple(img_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)

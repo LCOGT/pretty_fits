@@ -1,10 +1,7 @@
-alipy
-asciidata
+git+git://github.com/LCOGT/alipy.git#egg=alipy
 astropy
 astroscrappy
 Cython
 ipython
 numpy
 Pillow
-pyfits
-scipy

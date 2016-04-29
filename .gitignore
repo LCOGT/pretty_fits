@@ -65,3 +65,5 @@ target/
 *.ttf
 *.xml
 *.tif
+
+.pysex.*
