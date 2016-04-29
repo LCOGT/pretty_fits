@@ -10,7 +10,8 @@ In addition to the `requirement.txt` will need to have:
 - The rest of the requirements can be installed with `pip install -r requirements.txt`.
 
 # Running
-- Create a directory called `temp` at the same level as `image_ali.py`
-- Put the 3 FITS files you want to combine in this directory
-- Make the directory `temp` and `image_ali.py` sit in, writable. The process creates temporary files.
-- Run `python image_ali.py`
+- In `image_ali.py` change `DATA_DIR` to where ever you will be putting data
+- Put the 3 FITS files you want to combine into a sub-directory of `DATA_DIR`
+- Run `python image_ali.py -d <sub-directory name>`
+- If you are using STIFF add the `-st` command-line option
+- If you are using FPacked data, use the `-z` option
