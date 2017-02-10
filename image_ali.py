@@ -1,6 +1,6 @@
 '''
 ColourImager - Python pipeline to combine 3 FITS files into a single colour JPEG/PNG
-Copyright (C) 2015 Edward Gomez, LCOGT
+Copyright (C) 2017 Edward Gomez, Las Cumbres Observatory
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -97,7 +97,7 @@ def read_aligned(filelist):
     rgb_list =[]
     for i, file_in in enumerate(filelist):
         data, hdrs = fits.getdata(file_in, header=True)
-        data = clean_data(data)
+        # data = clean_data(data)
         data = scale_data(data, i)
         logging.warning('Shape of %s %s' % (file_in, str(data.shape)))
         rgb_list.append(data)
@@ -138,10 +138,10 @@ def read_write_data(filelist):
     return img_list
 
 
-def create_colour_stiff(img_list, filename='test.jpg'):
+def create_colour_stiff(img_list, filename='test.jpg', size=1500):
     resp = subprocess.call(['stiff']+img_list)
     if resp == 0:
-        resp = subprocess.call(['convert', '-quality','70%', '-resize','1500', 'stiff.tif', filename])
+        resp = subprocess.call(['convert', '-quality','70%', '-resize',size, 'stiff.tif', filename])
 
     return True
 
@@ -152,7 +152,7 @@ def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
 
     for id in identifications:
         if id.ok:
-            alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=True, outdir=tmpdir)
+            alipy.align.affineremap(id.ukn.filepath, id.trans, shape=outputshape, makepng=False, outdir=tmpdir)
 
     aligned_images = sorted(glob.glob(tmpdir+"/*_affineremap.fits"))
 
@@ -169,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
     parser.add_argument("-p", "--preview", help="show a PIL generated JPEG preview", action="store_true")
     parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
+    parser.add_argument("-s", "--size", help="Size in pixels of x axis")
     args = parser.parse_args()
 
     folder_name = args.directory
@@ -177,13 +178,11 @@ if __name__ == '__main__':
 
     ref_image, images_to_align, filename = select_images(folder=folder_path, fpacked=args.fpack)
 
-
+    img_list = read_write_data(images_to_align)
+    img_list = reproject_files(img_list[0], img_list, tmpdir)
     if args.stiff:
-        img_list = read_write_data(images_to_align)
-        img_list = reproject_files(img_list[0], img_list, tmpdir)
-        create_colour_stiff(img_list, filename)
+        create_colour_stiff(img_list, filename, size=args.size)
     else:
-        img_list = reproject_files(ref_image, images_to_align, tmpdir)
         create_colour_simple(img_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
 
     # Remove the temporary files
