@@ -169,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
     parser.add_argument("-p", "--preview", help="show a PIL generated JPEG preview", action="store_true")
     parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
-    parser.add_argument("-s", "--size", help="Size in pixels of x axis")
+    parser.add_argument("-s", "--size", help="Size in pixels of x axis", default='1500')
     args = parser.parse_args()
 
     folder_name = args.directory
