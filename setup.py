@@ -2,15 +2,17 @@ from setuptools import setup
 
 setup(
     name='pretty_fits',
-    version='0.1',
+    version='0.1.1',
     packages=['pretty_fits'],
     install_requires=[
         'astropy',
         'astroscrappy',
         'Pillow',
+        'alipy'
     ],
     dependency_links=[
     'git+git://github.com/LCOGT/alipy.git#egg=alipy',
+    'git+git://github.com/LCOGT/fits2image.git#egg=fits2image'
     ],
     entry_points='''
         [console_scripts]

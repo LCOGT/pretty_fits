@@ -18,17 +18,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 '''
 from astropy.io import fits
 from astroscrappy import detect_cosmics
-import PIL.Image as pli
 from PIL import ImageFont, ImageDraw
-import numpy as np
+from fits2image.conversions import fits_to_jpg
 import alipy
+import argparse
 import glob
 import logging
-import sys, os
-import argparse
-import tempfile
+import numpy as np
+import PIL.Image as pli
 import shutil
 import subprocess
+import sys, os
+import tempfile
 
 
 def reshape(data):
@@ -80,7 +81,6 @@ def select_images(folder='temp', fpacked=False):
     if fpacked:
         filetype = "%s/*.fits.fz"
         images_to_align = sorted(glob.glob(filetype % folder))
-        print(folder)
         ref_image = images_to_align[0]
         hdr = fits.getheader(ref_image, 1)
     else:
@@ -103,21 +103,6 @@ def read_aligned(filelist):
         rgb_list.append(data)
     return rgb_list
 
-def create_colour_simple(img_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
-    rgb_list = read_aligned(img_list)
-    rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
-    colour_img = pli.fromarray(rgb_cube)
-    if credit:
-        font = ImageFont.truetype("Helvetica.ttf", 40)
-        textstamp = 'Las Cumbres Observatory Global Telescope Network - %s' % object_name
-        draw = ImageDraw.Draw(colour_img)
-        draw.text((50, 10), textstamp, font=font, fill=(255,255,255))
-    colour_img.save(filename)
-    if preview:
-        colour_img.show()
-
-    return True
-
 
 def read_write_data(filelist):
     '''
@@ -138,10 +123,12 @@ def read_write_data(filelist):
     return img_list
 
 
-def create_colour_stiff(img_list, filename='test.jpg', size=1500):
+def create_colour_stiff(img_list, filename='test.jpg', size=1500, tiff=False):
     resp = subprocess.call(['stiff']+img_list)
-    if resp == 0:
+    if resp == 0 and not tiff:
         resp = subprocess.call(['convert', '-quality','70%', '-resize',size, 'stiff.tif', filename])
+    elif resp == 0 and tiff:
+        shutil.copyfile('stiff.tif',filename.replace('jpg','tiff'))
 
     return True
 
@@ -168,23 +155,28 @@ def run():
     parser.add_argument("-o", "--out_directory", help="directory for output files")
     parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
     parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
+    parser.add_argument("-t", "--tiff", help="Create a TIFF file", action="store_true")
     parser.add_argument("-p", "--preview", help="show a PIL generated JPEG preview", action="store_true")
     parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
     parser.add_argument("-s", "--size", help="Size in pixels of x axis", default='1500')
+    parser.add_argument("-g", "--grey", help="", default='1500')
+    parser.add_argument("-n", "--name", help="Name of the output file (.jpg will be appended)")
     args = parser.parse_args()
 
     folder_path = args.in_directory
     tmpdir = tempfile.mkdtemp()
 
     ref_image, images_to_align, filename = select_images(folder=folder_path, fpacked=args.fpack)
-
+    if args.name:
+        name = args.name.replace('.jpg','')
+        filename = "{}.jpg".format(name)
     img_list = read_write_data(images_to_align)
     img_list = reproject_files(img_list[0], img_list, tmpdir)
     filename = os.path.join(args.out_directory, filename)
     if args.stiff:
-        create_colour_stiff(img_list, filename, size=args.size)
+        create_colour_stiff(img_list, filename, size=args.size, tiff=args.tiff)
     else:
-        create_colour_simple(img_list, filename, object_name=folder_name, credit=args.credit, preview=args.preview)
+        fits_to_jpg(img_list, filename, width=args.size, height=args.size, color=True)
 
     # Remove the temporary files
     shutil.rmtree(tmpdir)
