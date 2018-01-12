@@ -111,11 +111,15 @@ def read_write_data(filelist):
     '''
     img_list =[]
     for i, file_in in enumerate(filelist):
+        new_filename = file_in.split('.')[0] + "_c.fits"
+        if os.path.isfile(new_filename):
+            # Reuse previously reduced images
+            img_list.append(new_filename)
+            continue
         data, hdrs = fits.getdata(file_in, header=True)
         data = clean_data(data)
         # data = scale_data(data, i)
         logging.warning('Shape of %s %s' % (file_in, str(data.shape)))
-        new_filename = file_in.split('.')[0] + "_c.fits"
         hdu = fits.PrimaryHDU(data, header=hdrs)
         hdu.writeto(new_filename)
         img_list.append(new_filename)
@@ -150,16 +154,13 @@ def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--files", help="Comma separated list of 3 files")
     parser.add_argument("-i", "--in_directory", help="directory for input files")
     parser.add_argument("-o", "--out_directory", help="directory for output files")
     parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
     parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
     parser.add_argument("-t", "--tiff", help="Create a TIFF file", action="store_true")
-    parser.add_argument("-p", "--preview", help="show a PIL generated JPEG preview", action="store_true")
     parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
     parser.add_argument("-s", "--size", help="Size in pixels of x axis", default='1500')
-    parser.add_argument("-g", "--grey", help="", default='1500')
     parser.add_argument("-n", "--name", help="Name of the output file (.jpg will be appended)")
     args = parser.parse_args()
 
