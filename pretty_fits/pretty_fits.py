@@ -18,14 +18,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 '''
 from astropy.io import fits
 from astroscrappy import detect_cosmics
-from PIL import ImageFont, ImageDraw
+from PIL import ImageFont, ImageDraw, Image
 from fits2image.conversions import fits_to_jpg
-import alipy
+from alipy.ident import run as alirun
+from alipy.align import shape
+
 import argparse
 import glob
 import logging
 import numpy as np
-import PIL.Image as pli
 import shutil
 import subprocess
 import sys, os
@@ -60,6 +61,42 @@ def clean_data(data):
     logging.warning('Max after median=%s' % data.max())
     return data
 
+def scale_for_planet(filename):
+    hdul = fits.open(filename)
+    data = hdul[1].data
+    moon_data = data.copy()
+    min_val = np.percentile(data,99.9)
+    data -= min_val
+    data[data<0.]=0.
+    data = data**2.
+    scaled_planet = data*128./(data.max())
+    # Moons
+    moon_data = np.arcsinh(moon_data)
+    moon_med = np.median(moon_data)
+    moon_max_val = np.percentile(moon_data,99.95)
+    moon_data -= moon_med
+    moon_data[moon_data<0.] = 0.
+    moon_data[moon_data>moon_max_val] = moon_max_val
+    scaled_moon = moon_data*128./(moon_max_val)
+    img_array = scaled_planet + scaled_moon
+    return img_array
+
+def create_planet_image(filename, outfile):
+
+    im = Image.fromarray(scaled_planet)# + scaled_moon)
+    if im.mode != 'RGB':
+        im = im.convert('RGB')
+    im.save(outfile)
+    return
+
+def create_colour_simple(rgb_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
+    #rgb_list[1] *= 3
+    rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
+    colour_img = Image.fromarray(rgb_cube)
+    colour_img.save(filename)
+    if preview:
+        colour_img.show()
+    return
 
 def scale_data(data, i):
     # Recalculate the median
@@ -138,8 +175,8 @@ def create_colour_stiff(img_list, filename='test.jpg', size=1500, tiff=False):
 
 
 def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
-    identifications = alipy.ident.run(ref_image, images_to_align[1:3], visu=False)
-    outputshape = alipy.align.shape(ref_image)
+    identifications = alirun(ref_image, images_to_align[1:3], visu=False)
+    outputshape = shape(ref_image)
 
     for id in identifications:
         if id.ok:
@@ -156,18 +193,20 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--in_directory", help="directory for input files")
     parser.add_argument("-o", "--out_directory", help="directory for output files")
-    parser.add_argument("-c", "--credit", help="apply a standard LCOGT credit watermark", action="store_true")
     parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
     parser.add_argument("-t", "--tiff", help="Create a TIFF file", action="store_true")
     parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
     parser.add_argument("-s", "--size", help="Size in pixels of x axis", default='1500')
     parser.add_argument("-n", "--name", help="Name of the output file (.jpg will be appended)")
+    parser.add_argument("-p", "--planet", help="Planetary processing (no alignment)" , action="store_true")
     args = parser.parse_args()
 
     folder_path = args.in_directory
     tmpdir = tempfile.mkdtemp()
 
     ref_image, images_to_align, filename = select_images(folder=folder_path, fpacked=args.fpack)
+    if args.planet:
+        create_planet_image(images_to_align)
     if args.name:
         name = args.name.replace('.jpg','')
         filename = "{}.jpg".format(name)
