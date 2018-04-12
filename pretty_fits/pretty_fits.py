@@ -61,29 +61,63 @@ def clean_data(data):
     logging.warning('Max after median=%s' % data.max())
     return data
 
+def planet_data_scale(data):
+    data[data<0.]=0.
+    std = np.sqrt(np.mean(data))
+    cutoff = 3*std + np.mean(data)
+    return data, cutoff
+
 def scale_for_planet(filename):
     hdul = fits.open(filename)
     data = hdul[1].data
     moon_data = data.copy()
     min_val = np.percentile(data,99.9)
     data -= min_val
-    data[data<0.]=0.
+    data, cutoff = planet_data_scale(data)
+    data[data<cutoff] = 0.
     data = data**2.
-    scaled_planet = data*128./(data.max())
+    scaled_planet = data*256./(data.max())
     # Moons
     moon_data = np.arcsinh(moon_data)
     moon_med = np.median(moon_data)
     moon_max_val = np.percentile(moon_data,99.95)
     moon_data -= moon_med
-    moon_data[moon_data<0.] = 0.
-    moon_data[moon_data>moon_max_val] = moon_max_val
-    scaled_moon = moon_data*128./(moon_max_val)
+    moon_data, cutoff = planet_data_scale(moon_data)
+    moon_data[moon_data>cutoff] = 0.
+    scaled_moon = moon_data*256./(moon_max_val)
     img_array = scaled_planet + scaled_moon
     return img_array
 
-def create_planet_image(filename, outfile):
+def scale_for_jupiter(filename):
+    hdul = fits.open(filename)
+    data = hdul[1].data
+    min_val = np.percentile(data,99.9)
+    data -= min_val
+    data, cutoff = planet_data_scale(data)
+    data[data<cutoff] = 0.
+    data = data**2.
+    scaled_planet = data*256./(data.max())
+    return scaled_planet
 
-    im = Image.fromarray(scaled_planet)# + scaled_moon)
+def scale_for_moons(filename):
+    hdul = fits.open(filename)
+    data = hdul[1].data
+    data[data<0.] = 0.
+    data = np.arcsinh(data)
+    moon_med = np.median(data)
+    moon_max_val = np.percentile(data,99.95)
+    data -= moon_med
+    scaled_moon = data*256./(moon_max_val)
+    return scaled_moon
+
+
+def create_jupiter_image(infile, outfile):
+    jupiter_data = scale_for_jupiter(infile)
+    moons_data = scale_for_moons(infile)
+    im_j = Image.fromarray(jupiter_data)
+    im_m = Image.fromarray(moons_data)
+    print(im_j.mode, im_m.mode)
+    im = Image.blend(im_j.convert('RGB'), im_m.convert('RGB'), 0.4)
     if im.mode != 'RGB':
         im = im.convert('RGB')
     im.save(outfile)
