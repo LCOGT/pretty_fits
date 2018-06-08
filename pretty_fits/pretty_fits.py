@@ -67,27 +67,6 @@ def planet_data_scale(data):
     cutoff = 3*std + np.mean(data)
     return data, cutoff
 
-def scale_for_planet(filename):
-    hdul = fits.open(filename)
-    data = hdul[1].data
-    moon_data = data.copy()
-    min_val = np.percentile(data,99.9)
-    data -= min_val
-    data, cutoff = planet_data_scale(data)
-    data[data<cutoff] = 0.
-    data = data**2.
-    scaled_planet = data*256./(data.max())
-    # Moons
-    moon_data = np.arcsinh(moon_data)
-    moon_med = np.median(moon_data)
-    moon_max_val = np.percentile(moon_data,99.95)
-    moon_data -= moon_med
-    moon_data, cutoff = planet_data_scale(moon_data)
-    moon_data[moon_data>cutoff] = 0.
-    scaled_moon = moon_data*256./(moon_max_val)
-    img_array = scaled_planet + scaled_moon
-    return img_array
-
 def scale_for_jupiter(filename):
     hdul = fits.open(filename)
     data = hdul[1].data
@@ -110,27 +89,40 @@ def scale_for_moons(filename):
     scaled_moon = data*256./(moon_max_val)
     return scaled_moon
 
-
-def create_jupiter_image(infile, outfile):
-    jupiter_data = scale_for_jupiter(infile)
-    moons_data = scale_for_moons(infile)
-    im_j = Image.fromarray(jupiter_data)
-    im_m = Image.fromarray(moons_data)
-    print(im_j.mode, im_m.mode)
-    im = Image.blend(im_j.convert('RGB'), im_m.convert('RGB'), 0.4)
-    if im.mode != 'RGB':
-        im = im.convert('RGB')
-    im.save(outfile)
+def create_jupiter_image(infiles, outfile):
+    imgs = []
+    for infile in infiles:
+        jupiter_data = scale_for_jupiter(infile)
+        moons_data = scale_for_moons(infile)
+        im_j = Image.fromarray(jupiter_data)
+        im_m = Image.fromarray(moons_data)
+        im = Image.blend(im_j.convert('RGB'), im_m.convert('RGB'), 0.4)
+        if im.mode != 'L':
+            im = im.convert('L')
+        imgs.append(im)
+    if len(imgs) == 3:
+        # Only make a colour image if we have 3 files
+        im_rgb = Image.merge('RGB', imgs)
+    else:
+        im_rgb = imgs[0]
+    im_rgb.save(outfile)
     return
 
-def create_colour_simple(rgb_list, filename='test.jpg', object_name='Unknown', credit=False, preview=False):
-    #rgb_list[1] *= 3
-    rgb_cube = np.dstack(rgb_list).astype(np.uint8)[::-1, :, :]  # make cube, flip vertical axis
-    colour_img = Image.fromarray(rgb_cube)
-    colour_img.save(filename)
-    if preview:
-        colour_img.show()
+def create_saturn_image(infile, outfile):
+    '''
+    Makes a single colour Saturn image, rotating and cropping appropriately
+    '''
+    data = fits.getdata(infile)
+    min_val = np.percentile(data,99.9)
+    data -= min_val
+    scaled_planet = data*256./(data.max())
+    tmp_im = Image.fromarray(scaled_planet)
+    tmp_im.crop((w/2-dp, h/2-dp, w/2+200, h/2+200))
+    tmp_im.transpose(method=Image.ROTATE_90)
+    tmp_im.convert('RGB')
+    tmp_im.save(outfile)
     return
+
 
 def scale_data(data, i):
     # Recalculate the median

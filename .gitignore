@@ -67,3 +67,5 @@ target/
 *.tif
 
 .pysex.*
+*.png
+*.jpg
