@@ -16,13 +16,11 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 '''
+from align_fits.quad import calibrate
 from astropy.io import fits
 from astroscrappy import detect_cosmics
-from PIL import ImageFont, ImageDraw, Image
 from fits2image.conversions import fits_to_jpg
-from alipy.ident import run as alirun
-from alipy.align import shape
-
+from PIL import ImageFont, ImageDraw, Image
 import argparse
 import glob
 import logging
@@ -201,7 +199,7 @@ def create_colour_stiff(img_list, filename='test.jpg', size=1500, tiff=False):
 
 
 def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
-    identifications = alirun(ref_image, images_to_align[1:3], visu=False)
+    identifications = calibrate(ref_image, images_to_align[1:3])
     outputshape = shape(ref_image)
 
     for id in identifications:
@@ -213,36 +211,3 @@ def reproject_files(ref_image, images_to_align, tmpdir='temp/'):
     img_list = [ref_image]+aligned_images
 
     return img_list
-
-
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--in_directory", help="directory for input files")
-    parser.add_argument("-o", "--out_directory", help="directory for output files")
-    parser.add_argument("-st", "--stiff", help="use STIFF for combining images", action="store_true")
-    parser.add_argument("-t", "--tiff", help="Create a TIFF file", action="store_true")
-    parser.add_argument("-z", "--fpack", help="Are the files rice compressed with fpack", action="store_true")
-    parser.add_argument("-s", "--size", help="Size in pixels of x axis", default='1500')
-    parser.add_argument("-n", "--name", help="Name of the output file (.jpg will be appended)")
-    parser.add_argument("-p", "--planet", help="Planetary processing (no alignment)" , action="store_true")
-    args = parser.parse_args()
-
-    folder_path = args.in_directory
-    tmpdir = tempfile.mkdtemp()
-
-    ref_image, images_to_align, filename = select_images(folder=folder_path, fpacked=args.fpack)
-    if args.planet:
-        create_planet_image(images_to_align)
-    if args.name:
-        name = args.name.replace('.jpg','')
-        filename = "{}.jpg".format(name)
-    img_list = read_write_data(images_to_align)
-    img_list = reproject_files(img_list[0], img_list, tmpdir)
-    filename = os.path.join(args.out_directory, filename)
-    if args.stiff:
-        create_colour_stiff(img_list, filename, size=args.size, tiff=args.tiff)
-    else:
-        fits_to_jpg(img_list, filename, width=args.size, height=args.size, color=True)
-
-    # Remove the temporary files
-    shutil.rmtree(tmpdir)
