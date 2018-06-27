@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 '''
-from align_fits.quad import calibrate
+import six
 from astropy.io import fits
 from astroscrappy import detect_cosmics
 from fits2image.conversions import fits_to_jpg
@@ -30,6 +30,7 @@ import subprocess
 import sys, os
 import tempfile
 
+from .quad import calibrate
 
 def reshape(data):
     return data.shape
@@ -138,7 +139,7 @@ def scale_data(data, i):
     logging.warning('Min scaled=%s' % scaled.min())
     return scaled
 
-def select_images(folder='temp', fpacked=False):
+def select_images(folder='temp', fpacked=True):
     if fpacked:
         filetype = "%s/*.fits.fz"
         images_to_align = sorted(glob.glob(filetype % folder))

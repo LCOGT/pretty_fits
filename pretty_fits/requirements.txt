@@ -1,7 +1,7 @@
-git+git://github.com/LCOGT/alipy.git#egg=alipy
+git+git://github.com/LCOGT/fits2image.git#egg=fits2image
 astropy
 astroscrappy
 Cython
-ipython
 numpy
 Pillow
+scipy

@@ -1,7 +1,6 @@
 import click
 
 from file_utils import find_directories, get_archive_data, find_files
-from align import align_files
 from .image import align_files
 
 @click.command()
@@ -19,13 +18,16 @@ from .image import align_files
 
 def main(in_dir, out_dir, request_id, no_download, planet, filter_name, stamp, stiff, tiff, width, name):
     if out_dir and request_id and no_download:
+        # We've already downloaded the data to a local dir
         file_group = find_directories(out_dir, request_id, filter_name)
     elif request_id and not no_download:
+        # We have a request ID and want to download the data
         get_archive_data(out_dir, request_id)
         file_group = find_directories(out_dir, request_id, filter_name)
     elif in_dir:
+        # All files are in `in_dir`
         file_group = find_files(in_dir)
-    align_files(file_group, out_dir, stamp)
+    align_process(file_group, out_dir, planet, stamp)
     return
 
 if __name__ == '__main__':
